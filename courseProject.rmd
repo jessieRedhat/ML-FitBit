@@ -1,0 +1,119 @@
+---
+title: "Course Project Prediction- Classe prediction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## data input 
+
+Seed was set at 55555 for all code in order to get similar results. Used packages are  caret and randomForest. Data source at http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+
+```{r caret, randomForest, echo=TRUE}
+set.seed(55555)
+library(caret)
+link1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+link2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+givendata <- read.csv( url(link1) , na.strings = c("NA","") )
+forTest  <- read.csv( url(link2) , na.strings = c("NA","") )
+
+TrainIndx <- createDataPartition(y=givendata$classe, p=0.7, list=FALSE)
+Trainer <- givendata[ TrainIndx, ] 
+Tester  <- givendata[-TrainIndx, ]
+
+#for time-being:
+#Trainer <- Trainer[c(1:500),]
+
+```
+
+## Reducing dimension
+
+Here we remove those columns which are not useful in training a model (e.g. fixed values, dependent values ...)
+```{r }
+Trainer_nZV <- nearZeroVar(Trainer, saveMetrics=TRUE)
+incName    <- data.frame("L1" = Trainer_nZV$percentUnique > 1.2, nms = names(Trainer))
+FzvNames   <- incName[incName$L1 ,2] 
+logca1 <-  names(Trainer) %in% FzvNames
+logca1[length(logca1)] <- TRUE
+Trainer <- Trainer [logca1 ]
+
+
+eps <- 0.05*nrow(Trainer)
+logc <- rep(TRUE,ncol(Trainer))
+
+for(i in c(1:ncol(Trainer))){
+  if(sum(is.na(Trainer[,i])) > eps ){
+    logc[i] <- FALSE
+  }  
+  else if(   sum(is.nan(Trainer[,i])) > eps ){
+    logc[i] <- FALSE
+  }
+  else{
+    logc[i] <-TRUE
+  } 
+} 
+
+Trainer <- Trainer[logc]
+Trainer <- Trainer[,-1]
+
+
+logc <- rep(TRUE,ncol(Trainer))
+for(i in c(1:ncol(Trainer))){
+  if(sum(as.numeric(Trainer[,i]))==0 ){
+    logc[i] <- FALSE
+  }   
+  else{
+    logc[i] <-TRUE
+  } 
+}
+Trainer <- Trainer[logc]
+Trainer <- Trainer[,-1]
+
+
+```
+
+## Reduce Testing and Tester datasets dimensions as Trainer
+```{r }
+
+logc2 <- names(Tester) %in% names(Trainer)
+Tester <- Tester[logc2]
+
+logc3 <- names(forTest) %in% names(Trainer)
+forTest <- forTest[logc3]
+
+```
+
+ 
+
+## Model
+
+Using random-forest training for our problem...
+
+```{r rpart, echo=TRUE} 
+library(rpart,caret)
+rpModel <- train(classe ~ . , data = Trainer, method="rf")
+
+```
+
+
+ 
+
+## Getting a confusion matrix on our testing partition
+
+```{r prdei, echo=TRUE} 
+predi  <- predict(rpModel, Tester )
+confusionMatrix(predi, Tester$classe)
+```
+## Now we get prediction:
+
+```{r pressure, echo=FALSE}
+
+FinalPredict  <- predict(rpModel, forTest )
+
+```
+ 
